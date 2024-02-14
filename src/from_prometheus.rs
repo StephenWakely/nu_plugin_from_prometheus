@@ -1,5 +1,5 @@
 use nu_plugin::{EvaluatedCall, LabeledError};
-use nu_protocol::{Span, Value};
+use nu_protocol::{Record, Span, Value};
 use prometheus_parser::{GroupKey, GroupKind, HistogramMetric, SimpleMetric, SummaryMetric};
 
 pub struct FromPrometheus;
@@ -7,7 +7,7 @@ pub struct FromPrometheus;
 impl FromPrometheus {
     pub fn convert(&self, _call: &EvaluatedCall, input: &Value) -> Result<Value, LabeledError> {
         match input {
-            Value::String { val, span } => Self::parse(val, *span),
+            Value::String { val, .. } => Self::parse(val, input.span()),
             _ => Err(LabeledError {
                 label: "Error".to_string(),
                 msg: "Wrong input type".to_string(),
@@ -27,7 +27,7 @@ impl FromPrometheus {
             .flat_map(|metric| {
                 let name = Value::String {
                     val: metric.name.clone(),
-                    span,
+                    internal_span: span,
                 };
 
                 match &metric.metrics {
@@ -40,7 +40,10 @@ impl FromPrometheus {
             })
             .collect();
 
-        Ok(Value::List { vals, span })
+        Ok(Value::List {
+            vals,
+            internal_span: span,
+        })
     }
 }
 
@@ -60,13 +63,15 @@ fn get_tags(key: &GroupKey, span: Span) -> Value {
         .labels
         .values()
         .cloned()
-        .map(|val| Value::String { val, span })
+        .map(|val| Value::String {
+            val,
+            internal_span: span,
+        })
         .collect::<Vec<_>>();
 
     Value::Record {
-        cols: labels,
-        vals: tags,
-        span,
+        val: Record::from_raw_cols_vals_unchecked(labels, tags),
+        internal_span: span,
     }
 }
 
@@ -82,20 +87,22 @@ fn counter_to_values<'a>(
             let tags = get_tags(key, span);
 
             Value::Record {
-                cols: header(),
-                vals: vec![
-                    name.clone(),
-                    Value::String {
-                        val: "Counter".to_string(),
-                        span,
-                    },
-                    tags,
-                    Value::Float {
-                        val: counter.value,
-                        span,
-                    },
-                ],
-                span,
+                val: Record::from_raw_cols_vals_unchecked(
+                    header(),
+                    vec![
+                        name.clone(),
+                        Value::String {
+                            val: "Counter".to_string(),
+                            internal_span: span,
+                        },
+                        tags,
+                        Value::Float {
+                            val: counter.value,
+                            internal_span: span,
+                        },
+                    ],
+                ),
+                internal_span: span,
             }
         })
         .collect()
@@ -113,20 +120,22 @@ fn gauge_to_values<'a>(
             let tags = get_tags(key, span);
 
             Value::Record {
-                cols: header(),
-                vals: vec![
-                    name.clone(),
-                    Value::String {
-                        val: "Gauge".to_string(),
-                        span,
-                    },
-                    tags,
-                    Value::Float {
-                        val: counter.value,
-                        span,
-                    },
-                ],
-                span,
+                val: Record::from_raw_cols_vals_unchecked(
+                    header(),
+                    vec![
+                        name.clone(),
+                        Value::String {
+                            val: "Gauge".to_string(),
+                            internal_span: span,
+                        },
+                        tags,
+                        Value::Float {
+                            val: counter.value,
+                            internal_span: span,
+                        },
+                    ],
+                ),
+                internal_span: span,
             }
         })
         .collect()
@@ -144,20 +153,22 @@ fn untyped_to_values<'a>(
             let tags = get_tags(key, span);
 
             Value::Record {
-                cols: header(),
-                vals: vec![
-                    name.clone(),
-                    Value::String {
-                        val: "Untyped".to_string(),
-                        span,
-                    },
-                    tags,
-                    Value::Float {
-                        val: counter.value,
-                        span,
-                    },
-                ],
-                span,
+                val: Record::from_raw_cols_vals_unchecked(
+                    header(),
+                    vec![
+                        name.clone(),
+                        Value::String {
+                            val: "Untyped".to_string(),
+                            internal_span: span,
+                        },
+                        tags,
+                        Value::Float {
+                            val: counter.value,
+                            internal_span: span,
+                        },
+                    ],
+                ),
+                internal_span: span,
             }
         })
         .collect()
@@ -178,51 +189,55 @@ fn histogram_to_values<'a>(
                     .buckets
                     .iter()
                     .map(|bucket| Value::Record {
-                        cols: vec!["bucket".to_string(), "count".to_string()],
-                        vals: vec![
-                            Value::Float {
-                                val: bucket.bucket,
-                                span,
-                            },
-                            Value::Int {
-                                val: bucket.count as i64,
-                                span,
-                            },
-                        ],
-                        span,
+                        val: Record::from_raw_cols_vals_unchecked(
+                            vec!["bucket".to_string(), "count".to_string()],
+                            vec![
+                                Value::Float {
+                                    val: bucket.bucket,
+                                    internal_span: span,
+                                },
+                                Value::Int {
+                                    val: bucket.count as i64,
+                                    internal_span: span,
+                                },
+                            ],
+                        ),
+                        internal_span: span,
                     })
                     .collect::<Vec<_>>(),
 
-                span,
+                internal_span: span,
             };
 
             Value::Record {
-                cols: vec![
-                    "name".to_string(),
-                    "type".to_string(),
-                    "tags".to_string(),
-                    "buckets".to_string(),
-                    "sum".to_string(),
-                    "count".to_string(),
-                ],
-                vals: vec![
-                    name.clone(),
-                    Value::String {
-                        val: "Histogram".to_string(),
-                        span,
-                    },
-                    tags,
-                    buckets,
-                    Value::Float {
-                        val: histogram.sum,
-                        span,
-                    },
-                    Value::Int {
-                        val: histogram.count as i64,
-                        span,
-                    },
-                ],
-                span,
+                val: Record::from_raw_cols_vals_unchecked(
+                    vec![
+                        "name".to_string(),
+                        "type".to_string(),
+                        "tags".to_string(),
+                        "buckets".to_string(),
+                        "sum".to_string(),
+                        "count".to_string(),
+                    ],
+                    vec![
+                        name.clone(),
+                        Value::String {
+                            val: "Histogram".to_string(),
+                            internal_span: span,
+                        },
+                        tags,
+                        buckets,
+                        Value::Float {
+                            val: histogram.sum,
+                            internal_span: span,
+                        },
+                        Value::Int {
+                            val: histogram.count as i64,
+                            internal_span: span,
+                        },
+                    ],
+                ),
+                internal_span: span,
             }
         })
         .collect()
@@ -243,51 +258,55 @@ fn summary_to_values<'a>(
                     .quantiles
                     .iter()
                     .map(|quantile| Value::Record {
-                        cols: vec!["quantile".to_string(), "value".to_string()],
-                        vals: vec![
-                            Value::Float {
-                                val: quantile.quantile,
-                                span,
-                            },
-                            Value::Float {
-                                val: quantile.value,
-                                span,
-                            },
-                        ],
-                        span,
+                        val: Record::from_raw_cols_vals_unchecked(
+                            vec!["quantile".to_string(), "value".to_string()],
+                            vec![
+                                Value::Float {
+                                    val: quantile.quantile,
+                                    internal_span: span,
+                                },
+                                Value::Float {
+                                    val: quantile.value,
+                                    internal_span: span,
+                                },
+                            ],
+                        ),
+                        internal_span: span,
                     })
                     .collect::<Vec<_>>(),
 
-                span,
+                internal_span: span,
             };
 
             Value::Record {
-                cols: vec![
-                    "name".to_string(),
-                    "type".to_string(),
-                    "tags".to_string(),
-                    "quantiles".to_string(),
-                    "sum".to_string(),
-                    "count".to_string(),
-                ],
-                vals: vec![
-                    name.clone(),
-                    Value::String {
-                        val: "Summary".to_string(),
-                        span,
-                    },
-                    tags,
-                    quantiles,
-                    Value::Float {
-                        val: summary.sum,
-                        span,
-                    },
-                    Value::Int {
-                        val: summary.count as i64,
-                        span,
-                    },
-                ],
-                span,
+                val: Record::from_raw_cols_vals_unchecked(
+                    vec![
+                        "name".to_string(),
+                        "type".to_string(),
+                        "tags".to_string(),
+                        "quantiles".to_string(),
+                        "sum".to_string(),
+                        "count".to_string(),
+                    ],
+                    vec![
+                        name.clone(),
+                        Value::String {
+                            val: "Summary".to_string(),
+                            internal_span: span,
+                        },
+                        tags,
+                        quantiles,
+                        Value::Float {
+                            val: summary.sum,
+                            internal_span: span,
+                        },
+                        Value::Int {
+                            val: summary.count as i64,
+                            internal_span: span,
+                        },
+                    ],
+                ),
+                internal_span: span,
             }
         })
         .collect()

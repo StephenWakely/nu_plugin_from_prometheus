@@ -4,6 +4,6 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-nu-plugin = "0.79.0"
-nu-protocol = { version = "0.79.0", features = ["plugin"] }
+nu-plugin = "0.90.1"
+nu-protocol = { version = "0.90.1", features = ["plugin"] }
 prometheus-parser = { git = "https://github.com/vectordotdev/vector" }
